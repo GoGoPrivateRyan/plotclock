@@ -1,0 +1,168 @@
+<!DOCTYPE HTML>
+<html>
+	<head>
+		<title>GoGoPrivateRyang</title>
+
+		<meta charset="utf-8">
+		<link rel="stylesheet" href="css/reset.css" type="text/css" media="screen" charset="utf-8" />
+		<link rel="stylesheet" href="css/style.css" type="text/css" media="screen" charset="utf-8" />
+
+		<script type="text/javascript" src="js/jq.js"></script>
+		<script type="text/javascript" src="js/sb-1.4.0.js"></script>
+		<script type="text/javascript">
+		  
+			// when window loads call the setup method
+			$(window).on("load", setup);
+
+			// Spacebrew Object
+			var sb, app_name = "Send commands to a remote plot clock.";
+			var mode = 1;
+
+			/**
+			* setup Function that connect to spacebrew and creates a listener for clicks of the submit button.
+			*/
+			function setup (){
+				var random_id = "0000" + Math.floor(Math.random() * 10000);
+
+				app_name = app_name + ' ' + random_id.substring(random_id.length-4);
+
+				// setup spacebrew
+				sb = new Spacebrew.Client();  // create spacebrew client object
+
+				sb.name(app_name);
+				sb.description("This app sends text to trigger a LED matrix showing running texts."); // set the app description
+
+		        // create the spacebrew subscription channels
+				sb.addPublish("commands", "string", "");	// create the publication feed
+				//sb.addSubscribe("responses", "string");		// create the subscription feed
+
+				// configure the publication and subscription feeds
+				sb.onOpen = onOpen;
+
+				// connect to spacbrew
+				sb.connect();  
+
+				// listen to button clicks
+				$("#btnMode").on("mousedown", onButtonModePress);
+				$("#btnClear").on("mousedown", onButtonClearPress);
+				$("#btnFrame").on("mousedown", onButtonFramePress);
+				$("#btnPark").on("mousedown", onButtonParkPress);
+				$("#btnInput").on("mousedown", onButtonInputPress);
+				$("#btnLine").on("mousedown", onButtonLinePress);
+			}
+
+			// Function that is called when Spacebrew connection is established
+			function onOpen() {
+				var message = "<br>在 SpaceBrew Cloud 登錄名稱為: <strong>" + sb.name() + "</strong>.";
+				$("#name").html(message);
+			}
+
+			function onButtonModePress (evt){
+				console.log("[btnMode] button has been pressed"); 
+				var strContent = document.getElementById("ctr-mode");
+				if (mode)
+				{
+					mode = 0;
+					strContent.innerHTML = strContent.innerHTML.replace(/白板/i, "時鐘");
+				}
+			    else
+			    {
+			    	console.log("mode = 0");
+			    	mode = 1;
+                    strContent.innerHTML = strContent.innerHTML.replace(/時鐘/i, "白板");
+			    }
+				sb.send("commands", "string", "ggpr,wb\n");
+			}
+
+		    function onButtonClearPress (evt){
+		        console.log("[btnClear] button has been pressed"); 
+	            sb.send("commands", "string", "wbc,clr\n");
+		    }
+
+		    function onButtonFramePress (evt){
+		        console.log("[btnFrame] button has been pressed"); 
+	            sb.send("commands", "string", "wbc,fr\n");
+		    }
+
+		    function onButtonParkPress (evt){
+		        console.log("[btnPark] button has been pressed"); 
+	            sb.send("commands", "string", "wbc,pk\n");
+		    }
+
+		    function onButtonInputPress (evt){ // input string and (x, y)
+		    	var instr, outstr, pos_x, pos_y;
+		        console.log("[btnInput] button has been pressed"); 
+		        instr = $("#in-string").val();
+		        pos_x = $("#in-input-x").val();
+		        pos_y = $("#in-input-y").val();
+		        outstr = "wbc,str," + pos_x + "," + pos_y + "," + instr + "\n";
+		        console.log(outstr); 
+	            sb.send("commands", "string", outstr);
+		    }
+
+		    function onButtonLinePress (evt){ // input (x1, y1) and (x2, y2)
+		    	var outstr, pos_x1, pos_y1, pos_x2, pos_y2;
+		        console.log("[btnLine] button has been pressed"); 
+		        pos_x1 = $("#in-line-x1").val();
+		        pos_y1 = $("#in-line-y1").val();
+		        pos_x2 = $("#in-line-x2").val();
+		        pos_y2 = $("#in-line-y2").val();
+		        outstr = "wbc,ln," + pos_x1 + "," + pos_y1 + "," + pos_x2 + "," + pos_y2 + "\n";
+	            sb.send("commands", "string", outstr);
+		    }
+
+	    </script>
+	</head>
+
+	<body>
+		<div id="container" style="width:600px;border:1px solid black;">
+
+		<div id="header" style="background-color:#EEEEEE;"> 
+			<h1 style="float:left;font-family:arial,helvetica,sans-serif;">http://gogoprivateryan.blogspot.com/</h1>
+		</div>
+
+        <div id="ctr-mode" style="width:600px;background-color:#bbbbbb;float:left;font-family:arial,helvetica,sans-serif;">
+			<h2>現在是白板模式.</h2>
+		</div>
+		<div id="ctr-btn-mode" style="width:600px;background-color:#bbbbbb;float:left;font-family:arial,helvetica,sans-serif;">
+			<button type="button" id="btnMode" style="width:80px; height:30px; font-family:arial,helvetica,sans-serif; font-size: 16px;">切換模式</button>
+		</div>
+
+		<div id="ctr-input" style="width:600px;background-color:#cccccc;float:left;font-family:arial,helvetica,sans-serif;">
+			<h2>可輸入 a~z 或 0~9 的字元與字串.<br></h2>
+			<font size="3">字串: </font><input id="in-string" style="left: 10px; height: 30px; width: 60px; font-size: 16px;"/>
+			<font size="3">座標 </font>
+			<font size="3"> X: </font><input id="in-input-x" style="left: 10px; height: 30px; width: 30px; font-size: 16px;"/>
+			<font size="3"> Y: </font><input id="in-input-y" style="left: 10px; height: 30px; width: 30px; font-size: 16px;"/>
+			<button type="button" id="btnInput" style="width:80px; height:30px; font-family:arial,helvetica,sans-serif; font-size: 16px;">輸入</button>
+		</div>
+
+		<div id="ctr-line" style="width:600px;background-color:#bbbbbb;float:left;font-family:arial,helvetica,sans-serif;">
+			<h2>畫一條線.</h2>
+			<font size="3">座標 </font>
+			<font size="3"> X1: </font><input id="in-line-x1" style="left: 10px; height: 30px; width: 30px; font-size: 16px;"/>
+			<font size="3"> Y1: </font><input id="in-line-y1" style="left: 10px; height: 30px; width: 30px; font-size: 16px;"/>
+			<font size="3"> X2: </font><input id="in-line-x2" style="left: 10px; height: 30px; width: 30px; font-size: 16px;"/>
+			<font size="3"> Y2: </font><input id="in-line-y2" style="left: 10px; height: 30px; width: 30px; font-size: 16px;"/>
+			<button type="button" id="btnLine" style="width:80px; height:30px; font-family:arial,helvetica,sans-serif; font-size: 16px;">輸入</button>
+		</div>
+
+		<div id="ctr-func" style="width:600px;background-color:#cccccc;;float:left;font-family:arial,helvetica,sans-serif;">
+			<h2>功能</h2>
+			<button type="button" id="btnClear" style="width:80px; height:30px; font-family:arial,helvetica,sans-serif; font-size: 16px;">擦桌子</button>
+			<button type="button" id="btnFrame" style="width:80px; height:30px; font-family:arial,helvetica,sans-serif; font-size: 16px;">畫框線</button>
+			<button type="button" id="btnPark" style="width:80px; height:30px; font-family:arial,helvetica,sans-serif; font-size: 16px;">筆歸位</button>
+		</div>
+
+		<div id="name" style="width:600px;background-color:#EEEEEE;;float:left;font-family:arial,helvetica,sans-serif;">
+			<h2>嚐試連結 SpaceBrew Cloud...</h2>
+		</div>
+
+		<div id="footer" style="background-color:#d3d3d3;clear:both;text-align:center;font-family:arial,helvetica,sans-serif;">
+			<h2>大兵萊恩 一路直前</h2>
+		</div>
+
+		</div>
+	</body>
+
+</html>
