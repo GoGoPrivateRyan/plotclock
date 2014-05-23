@@ -53,6 +53,7 @@
 
 #include <Time.h> // see http://playground.arduino.cc/Code/time 
 #include <Servo.h>
+#include <string.h>
 
 #ifdef REALTIMECLOCK
 // for instructions on how to hook up a real time clock,
@@ -74,6 +75,37 @@ volatile double lastX = 75;
 volatile double lastY = 47.5;
 
 int last_min = 0;
+
+// for serial port handling 
+char inData[80];
+byte index = 0;
+byte count = 0;
+float posX1, posY1, posX2, posY2;
+
+#define NO_PREFIX       0
+#define GGPR_PREFIX     1
+#define WBC_PREFIX      1
+#define CLOCK_MODE      0
+#define WHITEBOARD_MODE 1
+#define WBC_ZERO        0
+#define WBC_STR         1
+#define WBC_LN          2
+
+#define TOKEN_GGPR "ggpr"
+#define TOKEN_WB   "wb"
+#define TOKEN_CK   "ck"
+#define TOKEN_WB_C "wbc"
+#define TOKEN_QRY  "qry"
+#define TOKEN_CLR  "clr"
+#define TOKEN_PK   "pk"
+#define TOKEN_FR   "fr"
+#define TOKEN_LN   "ln"
+#define TOKEN_STR  "str"
+
+byte pfxGGPR = NO_PREFIX;
+byte pfxWBC = NO_PREFIX; 
+byte workMode = WHITEBOARD_MODE; 
+byte wbcFlag = WBC_ZERO; 
 
 void setup() 
 { 
@@ -106,13 +138,13 @@ void setup()
   setTime(19,38,0,0,0,0);
 #endif
 
-  drawTo(75.2, 47);
-  lift(0);
-  servo1.attach(SERVOPINLIFT);  //  lifting servo
-  servo2.attach(SERVOPINLEFT);  //  left servo
-  servo3.attach(SERVOPINRIGHT);  //  right servo
-  delay(1000);
+  Serial.begin(9600);
 
+/*  attachServo();
+  lift(2);
+  drawTo(75.2, 47);
+  lift(1);
+  detachServo();*/
 } 
 
 void loop() 
@@ -128,116 +160,143 @@ void loop()
 
 #else 
 
-/*
-  int i = 0;
-  if (last_min != minute()) {
-
-    if (!servo1.attached()) servo1.attach(SERVOPINLIFT);
-    if (!servo2.attached()) servo2.attach(SERVOPINLEFT);
-    if (!servo3.attached()) servo3.attach(SERVOPINRIGHT);
-
-    lift(0);
-
-    hour();
-    while ((i+1)*10 <= hour())
+  while (Serial.available() > 0)
+  {
+    char aChar = Serial.read();
+    if (aChar == '\n')
     {
-      i++;
-    }
-
-    number(3, 3, 111, 1);
-    number(5, 25, i, 0.9);
-    number(19, 25, (hour()-i*10), 0.9);
-    number(28, 25, 11, 0.9);
-
-    i=0;
-    while ((i+1)*10 <= minute())
-    {
-      i++;
-    }
-    number(34, 25, i, 0.9);
-    number(48, 25, (minute()-i*10), 0.9);
-    lift(2);
-    drawTo(74.2, 47.5);
-    lift(1);
-    last_min = minute();
-
-    servo1.detach();
-    servo2.detach();
-    servo3.detach();
-  }
-*/
-
- int i = 0;
-  if (last_min != minute()) {
-
-    if (!servo1.attached()) servo1.attach(SERVOPINLIFT);
-    if (!servo2.attached()) servo2.attach(SERVOPINLEFT);
-    if (!servo3.attached()) servo3.attach(SERVOPINRIGHT);
-
-    lift(0);
-
-    hour();
-    while ((i+1)*10 <= hour())
-    {
-      i++;
-    }
-
-    number(3, 3, 111, 1);
-
-
-    i=0;
-    while ((i+1)*10 <= minute())
-    {
-      i++;
-    }
-
-
-/*    letter(10, 35, 'l', 0.9);    
-    letter(15, 35, 'm', 0.9);
-    letter(23, 35, 'n', 0.9);
-    letter(33, 35, 'o', 0.9);
-    letter(40, 35, 'p', 0.9);
-    letter(50, 35, 'q', 0.9);
-    
-    letter(10, 23, 'r', 0.9);*/
-    letter(18, 35, 'x', 0.9);
-    letter(26, 35, 'y', 0.9);
-    letter(34, 35, 'z', 0.9);
-/*    letter(42, 23, 'v', 0.9);
-    letter(50, 23, 'w', 0.9);
-
-    letter(8, 40, 'h', 0.9);    
-    letter(16, 40, 'a', 0.9);
-    letter(24, 40, 'p', 0.9);
-    letter(32, 40, 'p', 0.9);
-    letter(40, 40, 'y', 0.9);
-
-    letter(6, 30, 'm', 0.9);    
-    letter(12, 30, 'o', 0.9);
-    letter(20, 30, 't', 0.9);
-    letter(28, 30, 'h', 0.9);
-    letter(36, 30, 'e', 0.9);    
-    letter(44, 30, 'r', 0.9);    
-    letter(52, 30, 's', 0.9);        
+      // End of record detected. Time to parse
+      char *p = inData; //assign the string to *p
+      int counter = 0; //initialise the counter
+      String str;
             
-    letter(8, 18, 'd', 0.9);    
-    letter(16, 18, 'a', 0.9);
-    letter(24, 18, 'y', 0.9);*/
-    
-    lift(2);
-    drawTo(74.2, 47.5);
-    lift(1);
-    last_min = minute();
+      str = strtok(p, ",");
+      while (str != NULL)
+      {
+        Serial.println(str);
+        ParseCommand(str);
+        counter++;
+        str = strtok(NULL, ",");
+      }
 
-    servo1.detach();
-    servo2.detach();
-    servo3.detach();
+      index = 0;
+      inData[index] = NULL;      
+      
+      Serial.write("done\n");
+    }
+    else
+    {
+      inData[index] = aChar;
+      index++;
+      inData[index] = '\0'; // Keep the string NULL terminated
+    }
   }
-  
- 
-#endif
 
+  if (workMode == 0) // clock mode  
+  {
+    int i = 0;
+
+    drawTo(75.2, 47);    
+    
+    if (last_min != minute()) 
+    {
+      attachServo();
+      hour();
+      while ((i+1)*10 <= hour())
+      {
+        i++;
+      }
+
+      number(3, 3, 111, 1);
+      lift(2);
+      drawTo(5, 25);
+      lift(0);
+      number(5, 25, i, 0.9);
+      number(19, 25, (hour()-i*10), 0.9);
+      number(28, 25, 11, 0.9);
+
+      i = 0;
+      while ((i+1)*10 <= minute())
+      {
+        i++;
+      }
+      number(34, 25, i, 0.9);
+      number(48, 25, (minute()-i*10), 0.9);
+      lift(2);
+      drawTo(74.2, 47.5);
+      lift(1);    
+      last_min = minute();
+
+      detachServo();
+    }   
+  } 
+  
+#endif
 } 
+
+void attachServo()
+{
+  drawTo(75.2, 47);
+  
+  if (!servo1.attached()) servo1.attach(SERVOPINLIFT);
+  if (!servo2.attached()) servo2.attach(SERVOPINLEFT);
+  if (!servo3.attached()) servo3.attach(SERVOPINRIGHT);
+ 
+  delay(300);
+}
+
+void detachServo()
+{
+  servo1.detach();
+  servo2.detach();
+  servo3.detach();
+}
+
+void clearWhiteboard()
+{   
+   lift(2);
+   drawTo(75.2, 47);
+   
+   lift(0);
+   drawTo(70, 46);
+   drawTo(65, 43);
+
+   drawTo(65, 49);
+   drawTo(5, 49);
+   drawTo(5, 45);
+   drawTo(65, 45);
+   drawTo(65, 40);
+
+   drawTo(5, 40);
+   drawTo(5, 35);
+   drawTo(65, 35);
+   drawTo(65, 30);
+
+   drawTo(5, 30);
+   drawTo(5, 25);
+   drawTo(65, 25);
+   drawTo(65, 20);
+
+   drawTo(5, 20);
+   drawTo(60, 44);
+
+   drawTo(75.2, 47);
+   lift(1);  
+}
+
+
+void drawFrame()
+{
+   lift(2);
+   drawTo(5, 10);
+   
+   lift(0);
+   drawTo(5, 46);
+   drawTo(65, 46);
+   drawTo(65, 10);
+   drawTo(5, 10);
+   lift(1);    
+}
 
 // Writing numeral with bx by being the bottom left originpoint. Scale 1 equals a 20 mm high font.
 // The structure follows this principle: move to first startpoint of the numeral, lift down, draw numeral, lift up
@@ -256,7 +315,6 @@ void number(float bx, float by, int num, float scale) {
     lift(1); // 字和字之間的運筆高度
     break;
   case 1:
-
     drawTo(bx + 3 * scale, by + 15 * scale);
     lift(0);
     drawTo(bx + 10 * scale, by + 20 * scale);
@@ -325,33 +383,7 @@ void number(float bx, float by, int num, float scale) {
     break;
 
   case 111: // 擦掉
-
-    lift(0);
-    drawTo(70, 46);
-    drawTo(65, 43);
-
-    drawTo(65, 49);
-    drawTo(5, 49);
-    drawTo(5, 45);
-    drawTo(65, 45);
-    drawTo(65, 40);
-
-    drawTo(5, 40);
-    drawTo(5, 35);
-    drawTo(65, 35);
-    drawTo(65, 30);
-
-    drawTo(5, 30);
-    drawTo(5, 25);
-    drawTo(65, 25);
-    drawTo(65, 20);
-
-    drawTo(5, 20);
-    drawTo(60, 44);
-
-    drawTo(75.2, 47);
-    lift(2);
-
+    clearWhiteboard();
     break;
 
   case 11: // 畫出報時數字中間的 ':'
@@ -596,14 +628,6 @@ void letter(float bx, float by, char let, float scale) {
     drawTo(bx + 8 * scale, by + 5 * scale);
     lift(1);
     break;    
-//////////////  
-
-
-
-
-
-  
-  
   }
 }
 
@@ -764,5 +788,179 @@ void set_XY(double Tx, double Ty)
 
 }
 
+void ParseCommand(String str)
+{
+   // the input commands
+   //   * ggpr
+   //      - ck: clock mode
+   //      - wb: whiteboard mode   
+   //      - qry: query
+   //   * wbc
+   //      - clr: clear whiteboard
+   //      - pk: park the pen
+   //      - fr: draw a frame
+   //      - str: write a string
+   //      - ln: draw a line
+   
+   switch (count) // handling parameters
+   {
+     case 4: // get x1
+       if (wbcFlag = WBC_LN)
+       {
+         //Serial.println("x1 is "+str);
+         posX1 = str.toInt();
+       }
+       count--;
+       break;
+     case 3: // get x, or y1
+       if (wbcFlag == WBC_STR)
+       {
+         //Serial.println("x is "+str);
+         posX1 = str.toInt();
+       }
+       else if (wbcFlag == WBC_LN)
+       {
+         //Serial.println("y1 is "+str);
+         posY1 = str.toInt();
+       }
+       count--;
+       break;
+     case 2: // get y, or x2
+       if (wbcFlag == WBC_STR)
+       {
+         //Serial.println("y is "+str);
+         posY1 = str.toInt();
+       }
+       else if (wbcFlag == WBC_LN)
+       {
+         //Serial.println("x2 is "+str);
+         posX2 = str.toInt();         
+       }
+       count--;         
+       break;
+     case 1: // get a string or y2
+       if (wbcFlag == WBC_LN)
+       {
+         //Serial.println("y2 is "+str);
+         posY2 = str.toInt();                  
+       }
+              
+       attachServo();
+       lift(2);
+       drawTo(posX1, posY1);
+       lift(0);
+       if (wbcFlag == WBC_STR)
+       {
+         for (int i=0; i<str.length(); i++)
+         {
+           char ch = str.charAt(i);
+           if (ch <= 57 && ch >= 48) // number 
+             number(posX1+5*i, posY1, (ch-48), 0.9);
+           else
+             letter(posX1+5*i, posY1, ch, 1);
+         }
+       }
+       else if (wbcFlag == WBC_LN)
+       {
+         drawTo(posX2, posY2);
+       }
+       lift(1);
+       detachServo();
+       
+       count--;         
+       pfxWBC = NO_PREFIX; // finish handling a WBC command
+       wbcFlag = WBC_ZERO; // finish handling parameters
+       posX1 = posY1 = posX2 = posY2 = 0;
+       break;
+     default:
+       break;
+   }
+      
+   if (str == TOKEN_GGPR && pfxGGPR == NO_PREFIX) // global command
+   {
+      pfxGGPR = GGPR_PREFIX;
+      //Serial.println("global command mode");                  
+   }
+   else if (str == TOKEN_CK && pfxGGPR == GGPR_PREFIX) // switch to clock mode
+   {
+      //Serial.println("switch to clock mode");                               
+      pfxGGPR = NO_PREFIX;
+      workMode = CLOCK_MODE;
+   }
+   else if (str == TOKEN_WB && pfxGGPR == GGPR_PREFIX) // switch to whiteboard mode
+   {
+      //Serial.println("switch to whiteboard mode");
+      pfxGGPR = NO_PREFIX;
+      workMode = WHITEBOARD_MODE;
+   }
+   else if (str == TOKEN_WB_C && pfxWBC == NO_PREFIX && workMode == WHITEBOARD_MODE) // whiteboard command
+   {
+      //Serial.println("start handling WBC command");
+      pfxWBC = WBC_PREFIX;
+   }
+   else if (str == TOKEN_QRY && pfxGGPR == GGPR_PREFIX) // query which mode it is
+   {
+      //Serial.println("query which mode it is");
+      if (workMode == WHITEBOARD_MODE)
+        Serial.println("wb");
+      else if (workMode == CLOCK_MODE)
+        Serial.println("ck");
+        
+      pfxGGPR = NO_PREFIX;
+   }
+   else if (str == TOKEN_LN && pfxWBC == WBC_PREFIX && workMode == WHITEBOARD_MODE) // draw a line from (x1,y1) to (x2,y2)
+   {
+      // waiting for x, y, char
+      //Serial.println("draw a line, waiting for x1, y1, x2, y2");
+      count = 4;
+      wbcFlag = WBC_LN;
+   }
+   else if (str == TOKEN_STR && pfxWBC == WBC_PREFIX && workMode == WHITEBOARD_MODE) // write a string at (x, y)
+   {
+      // waiting for x, y, str
+      //Serial.println("write a string, waiting for x, y, str");
+      count = 3;
+      wbcFlag = WBC_STR;
+   }
+   else if (str == TOKEN_CLR && pfxWBC == WBC_PREFIX && workMode == WHITEBOARD_MODE) // clear whiteboard
+   {
+      // clear whiteboard
+      pfxWBC = NO_PREFIX;
+      //Serial.println("clear whiteboard");
+      attachServo();
+      clearWhiteboard();
+      detachServo();
+   }
+   else if (str == TOKEN_FR && pfxWBC == WBC_PREFIX && workMode == WHITEBOARD_MODE) // draw frame
+   {
+      // draw frame
+      pfxWBC = NO_PREFIX;
+      //Serial.println("draw frame");
+      attachServo();
+      drawFrame();
+      detachServo();
+   }   
+   else if (str == TOKEN_PK && pfxWBC == WBC_PREFIX && workMode == WHITEBOARD_MODE) // park pen
+   {
+      // park pen
+      pfxWBC = NO_PREFIX;
+      //Serial.println("park pen");
+      attachServo();
+      lift(2);
+      delay(300);
+      drawTo(75.2, 47);
+      lift(1);
+      detachServo();
+   }
+   else
+   {
+      if (count == 0)
+      {
+         //Serial.println("none command");
+         pfxGGPR = NO_PREFIX;
+         pfxWBC = NO_PREFIX;
+      }
+   }
+}
 
 
